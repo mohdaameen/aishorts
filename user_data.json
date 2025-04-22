@@ -1,0 +1,49 @@
+[
+  {
+    "username": "admin",
+    "password": "scrypt:32768:8:1$MXEVvNF7mKQfuSXx$8a250ab5f664fc1b94b62c6732bc7bab6289dcbc5501480b8cd011691fec27f792ba5412dfb664d69af11326b4482c0d1c1524dba75b10f1331f49dfd50f01d2",
+    "keywords": [
+      "AI",
+      "MCP",
+      "Generative AI",
+      "Agentic AI",
+      "Langchain",
+      "LangGraph",
+      "Langchain Agent",
+      "Langchain Tool",
+      "Langchain Agent",
+      "Langchain Tool",
+      "Langchain Agent"
+    ],
+    "channels": [
+      "UCNU_lfiiWBdtULKOw6X0Dig",
+      "UCsQoiOrh7jzKmE8NBofhTnQ"
+    ]
+  },
+  {
+    "username": "aameen2710",
+    "password": "scrypt:32768:8:1$3xXhxINo4Zy58HlT$09d25575064f5ddfe1f892f5f73a5b650f980c0dd517c72aab985f77afc949863e78f970eb8a4e7e4eaacd108defe754da30e1dc8be0bb5a597de28c9e91fbc5",
+    "keywords": [
+      "AI",
+      "MCP",
+      "OpenAI"
+    ],
+    "channels": [
+      "UChpleBmo18P08aKCIgti38g",
+      "UCXZCJLdBC09xxGZ6gcdrc6A"
+    ]
+  },
+  {
+    "username": "aameen27",
+    "password": "scrypt:32768:8:1$HulPAuwB3eCDRCSd$e94705705d7df2dd58b54fe71a6e29cdd521c5d4c2c50cf6627472018db1acea5ff068d42956efa92cd33c5c8167500056cc9cd390cfb0f68e6045e81319124e",
+    "keywords": [
+      "AI",
+      "MCP",
+      "OpenAI"
+    ],
+    "channels": [
+      "UChpleBmo18P08aKCIgti38g",
+      "UCXZCJLdBC09xxGZ6gcdrc6A"
+    ]
+  }
+]
