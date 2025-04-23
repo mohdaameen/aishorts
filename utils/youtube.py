@@ -4,8 +4,8 @@ import requests
 from dotenv import load_dotenv
 from youtube_transcript_api import YouTubeTranscriptApi
 from datetime import datetime
-from .summarizer import summarize_final_summary
-from models.schemas import SummaryTagMap,UserTagMap, UserCredential, Summary, Tag, Database
+from .summarizer import summarize_final_summary_youtube
+from models.schemas import SummaryTagMap, UserTagMap, UserCredential, Summary, Tag, Database
 from sqlalchemy.exc import IntegrityError
 
 load_dotenv()
@@ -20,7 +20,7 @@ def get_uploads_playlist_id(channel_id: str) -> str:
     response = requests.get(url).json()
     return response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
-def get_latest_videos_from_channel(channel_id: str, max_results=2) -> list:
+def get_latest_videos_from_channel(channel_id: str, max_results=1) -> list:
     """
     Get the latest videos from a YouTube channel.
 
@@ -47,7 +47,6 @@ def get_latest_videos_from_channel(channel_id: str, max_results=2) -> list:
 def fetch_youtube_transcript(video_id: str) -> list:
     try:
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
-        print(transcript)
         return transcript
     except Exception as e:
         return [{"text": f"Error fetching transcript: {str(e)}"}]
@@ -55,7 +54,7 @@ def fetch_youtube_transcript(video_id: str) -> list:
 
 
 def process_all_users():
-    print(f"🕒 process_all_users() triggered at {datetime.now()}")
+    print(f"🕒 process_all_users_youtube() triggered at {datetime.now()}")
     session = db.get_session()
 
     try:
@@ -80,6 +79,7 @@ def process_all_users():
 
                 full_text = " ".join([entry["text"] for entry in transcript])
                 summary_output = summarize_final_summary(full_text)
+                print(summary_output)
 
                 new_summary = Summary(
                     title=summary_output.get("title"),

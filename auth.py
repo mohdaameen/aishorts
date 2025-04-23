@@ -56,7 +56,7 @@ def register():
         session.close()
 
 @auth_bp.route("/login", methods=["POST"])
-def login():
+def login():   
     data = request.get_json()
     username = data.get("username")
     password = data.get("password")

@@ -1,9 +1,13 @@
 youtube_summary_backend/
-├── app.py                  
-├── auth.py                
+├── app.py 
+├── auth.py              
+├── models/
+|   └── schemas.py  
 ├── user_data.json         
 ├── utils/
-│   └── youtube.py        
-├── summaries/
-│   └── username.json
+│   └── youtube.py
+│   └── rss.py
+│   └── summarizer.py
+├── readme.md
 └── requirements.txt
+

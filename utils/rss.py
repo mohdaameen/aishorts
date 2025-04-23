@@ -1,9 +1,13 @@
 import feedparser
 from newspaper import Article
 from datetime import datetime
-from .summarizer import summarize_final_summary
+from typing import Tuple
+from .summarizer import summarize_final_summary_analyticalvidya
+from models.schemas import SummaryTagMap, UserTagMap, UserCredential, Summary, Tag, Database
 import os
 import json
+
+db=Database()
 
 def fetch_rss_entries(rss_url, max_entries=1):
     feed = feedparser.parse(rss_url)
@@ -14,97 +18,85 @@ def fetch_rss_entries(rss_url, max_entries=1):
 
     return entries[:max_entries]
 
-
-
-def article_matches_keywords(title: str, description: str, keywords: list) -> bool:
-    text = f"{title} {description}".lower()
-    return any(keyword.lower() in text for keyword in keywords)
-
-def extract_article_text(url: str) -> str:
+def extract_article_text(url: str) -> Tuple[bool, str]:
     try:
         article = Article(url)
         article.download()
         article.parse()
-        return article.text
+        return True, article.text
     except Exception as e:
-        return f"Error extracting article: {str(e)}"
-
-def load_processed_blog_links(json_file: str) -> set:
-    if os.path.exists(json_file):
-        try:
-            with open(json_file, mode="r", encoding="utf-8") as f:
-                data = json.load(f)
-            return {entry["link"] for entry in data if entry.get("source") == "blog"}
-        except json.JSONDecodeError:
-            return set()
-    return set()
-
-def append_blog_summary(link: str, blog_title: str, summary_data: dict, json_file: str, source: str = "blog") -> None:
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "link": link,
-        "title": blog_title,
-        "summary": summary_data,
-        "source": source
-    }
-    if os.path.exists(json_file):
-        try:
-            with open(json_file, mode="r", encoding="utf-8") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            data = []
-    else:
-        data = []
-    data.append(entry)
-    with open(json_file, mode="w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        return False, f"Error extracting article: {str(e)}"
 
 
 def process_blog_feed_for_all_users():
-    rss_url = "https://www.analyticsvidhya.com/feed/"
-    with open("user_data.json", "r", encoding="utf-8") as f:
-        users = json.load(f)
+    print(f"🕒 process_all_users_analyticsvidya() triggered at {datetime.now()}")
+    session = db.get_session()
 
-    for user in users:
-        username = user["username"]
-        keywords = user.get("keywords", [])
-        json_file = f"summaries/{username}.json"
-        processed_links = load_processed_blog_links(json_file)
-        print("here-1")
-
-        print(f"\n📰 Checking RSS for {username}")
-
+    try:
+        rss_url = "https://www.analyticsvidhya.com/feed/"
         entries = fetch_rss_entries(rss_url)
-        print("this is list",entries)
         for entry in entries:
-            print("One Entry",entry)
+            print("One Entry: ",entry)
             title = entry.get("title", "")
             description = entry.get("summary", "")
             link = entry.get("link", "")
 
-            if link in processed_links:
+            existing_summary = session.query(Summary).filter_by(link=link).first()
+            if existing_summary:
                 print(f"✅ Already processed: {link}")
                 continue
 
-            if not article_matches_keywords(title, description, keywords):
-                print(f"No keyword match for: {title}")
-                continue
-
             print(f"🔍 Processing blog: {title}")
-            full_text = extract_article_text(link)
-            if "Error" in full_text:
+
+            success, full_text = extract_article_text(link)
+            if not success:
+                print(f"❌ Failed to extract article: {full_text}")
                 continue
+    
+    
 
-            print('here')
+            summary_output = summarize_final_summary_analyticalvidya(full_text)
+            print(summary_output)
+            print("Summary fetched by AI: ",summary_output)
+            blog_title = summary_output.get("title")
+            print("Title of the blog: ",blog_title)
 
-            summary = summarize_final_summary(full_text)
-            print('here2')
-            blog_title = summary.get("title")
-            print(blog_title)
-            summary_data = {
-                "summary": summary.get("summary"),
-                "tags": summary.get("tags"),
-                "category": summary.get("category")
-            }
+            new_summary = Summary(
+                    title=summary_output.get("title"),
+                    summary=summary_output.get("summary"),
+                    source="analyticsvidhya",
+                    link=link,
+                    category=summary_output.get("category")
+                )
 
-            append_blog_summary(link, blog_title, summary_data, json_file)
+            session.add(new_summary)
+            session.flush()
+
+            tag_names = summary_output.get("tags", [])
+            for tag_name in tag_names:
+                tag_name = tag_name.lower().strip()
+                    
+                tag = session.query(Tag).filter_by(name=tag_name).first()
+                if not tag:
+                    tag = Tag(name=tag_name)
+                    session.add(tag)
+                    session.flush()
+                new_summary.tags.append(tag)
+
+            print(f"✅ Saved summary for blog: {link}")
+
+        session.commit()
+        print("✅ All summaries stored in DB.")
+
+    except Exception as e:
+        session.rollback()
+        print(f"❌ Error: {e}")
+    finally:
+        session.close()
+            
+
+
+       
+        
+        
+
