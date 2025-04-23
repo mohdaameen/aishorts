@@ -4,8 +4,9 @@ import requests
 from dotenv import load_dotenv
 from youtube_transcript_api import YouTubeTranscriptApi
 from datetime import datetime
-from models.schemas import UserCredential, VideoSummary 
 from .summarizer import summarize_final_summary
+from models.schemas import UserCredential, VideoSummaryGlobal, UserVideoMap, UserPreference
+from sqlalchemy.exc import IntegrityError
 
 load_dotenv()
 

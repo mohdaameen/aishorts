@@ -6,15 +6,15 @@ import os
 import json
 from utils.youtube import process_all_users
 from utils.rss import process_blog_feed_for_all_users
-# from models.schemas import Database
+from models.schemas import Database
 
-# db = Database()
+db = Database()
 
 
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(auth_bp)
-# db.create_tables()  
+db.create_tables()  
 
 
 
