@@ -1,12 +1,14 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_apscheduler import APScheduler
 from auth import auth_bp, token_required
 import os
 import json
 from utils.youtube import process_all_users
+from sqlalchemy.orm import joinedload
 from utils.rss import process_blog_feed_for_all_users
-from models.schemas import Database
+from models.schemas import Database, Tag, UserTagMap, UserCredential, Summary
+
 
 db = Database()
 
@@ -14,15 +16,13 @@ db = Database()
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(auth_bp)
-db.create_tables()  
-
-
+# db.create_tables()  
 
 scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
-scheduler.add_job(id='youtube_summary_job', func=process_all_users, trigger='interval', seconds=12000)
+scheduler.add_job(id='youtube_summary_job', func=process_all_users, trigger='interval', seconds=100)
 scheduler.add_job(id='blog_summary_job', func=process_blog_feed_for_all_users, trigger='interval', seconds=12000)
 
 @app.route("/", methods=["GET"])
@@ -31,20 +31,89 @@ def index():
 
 @app.route("/summaries", methods=["GET"])
 @token_required
-def get_user_summaries(current_user):
-    json_file = f"summaries/{current_user}.json"
-    
-    if os.path.exists(json_file):
-        try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    else:
-        data = []
+def get_user_summaries(user):
+    print(user)
+    session = db.get_session()
+    try:
+        tag_names = [name for (name,) in session.query(Tag.name)
+                     .join(UserTagMap)
+                     .filter(UserTagMap.user_id == user.id)
+                     .all()]
+        print(tag_names)
 
-    summaries = [entry.get("summary", "") for entry in data]
-    return jsonify(summaries)
+        if not tag_names:
+            return jsonify([])
+
+        summaries = (
+            session.query(Summary)
+            .join(Summary.tags)
+            .filter(Tag.name.in_(tag_names))
+            .options(joinedload(Summary.tags))
+            .distinct()
+            .all()
+        )
+        print(summaries[0])
+
+        summary_list = []
+        for summary in summaries:
+            summary_list.append({
+                "title": summary.title,
+                "summary": summary.summary,
+                "category": summary.category,
+                "tags": [tag.name for tag in summary.tags],
+                "source": summary.source
+            })
+
+        return jsonify(summary_list)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        session.close()
+
+
+
+
+@app.route("/tags", methods=["GET"])
+@token_required
+def get_all_tags(current_user):
+    session = db.get_session()
+    try:
+        tags = session.query(Tag).all()
+        tag_names = [tag.name for tag in tags]
+        return jsonify(tag_names)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route("/set-user-tags", methods=["POST"])
+@token_required
+def set_user_tags(current_user):
+    session = db.get_session()
+    try:
+        tag_list = request.json.get("tags", [])
+        if not tag_list:
+            return jsonify({"error": "No tags provided"}), 400
+
+        session.query(UserTagMap).filter_by(user_id=current_user.id).delete()
+
+        for tag_name in tag_list:
+            tag = session.query(Tag).filter_by(name=tag_name.lower()).first()
+            if tag:
+                user_tag_map = UserTagMap(user_id=current_user.id, tag_id=tag.id)
+                session.add(user_tag_map)
+
+        session.commit()
+        return jsonify({"message": "Tags updated successfully"})
+    except Exception as e:
+        session.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
+
 
 
 if __name__ == "__main__":

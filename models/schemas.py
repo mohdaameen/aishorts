@@ -1,79 +1,62 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Table, Text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, backref
 from datetime import datetime
 
 Base = declarative_base()
 
+# Association table for Summary <-> Tag (Many-to-Many)
+class SummaryTagMap(Base):
+    __tablename__ = 'summary_tag_map'
+    summary_id = Column(Integer, ForeignKey('summaries.id'), primary_key=True)
+    tag_id = Column(Integer, ForeignKey('tags.id'), primary_key=True)
+
+# Association table for User <-> Tag (User's interest tags)
+class UserTagMap(Base):
+    __tablename__ = 'user_tag_map'
+    user_id = Column(Integer, ForeignKey('user_credentials.id'), primary_key=True)
+    tag_id = Column(Integer, ForeignKey('tags.id'), primary_key=True)
+
 class UserCredential(Base):
-    __tablename__ = 'user_credential'
+    __tablename__ = 'user_credentials'
+
     id = Column(Integer, primary_key=True)
     username = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    preferences = relationship("UserPreference", back_populates="user", cascade="all, delete-orphan")
-    user_video_maps = relationship("UserVideoMap", back_populates="user", cascade="all, delete-orphan")
+    tags = relationship("Tag", secondary="user_tag_map", back_populates="users")
 
-    def __str__(self):
+    def __repr__(self):
         return f"<UserCredential(id={self.id}, username='{self.username}')>"
-    
 
-    
-class UserPreference(Base):
-    __tablename__ = 'user_preference'
+class Summary(Base):
+    __tablename__ = 'summaries'
+
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("user_credential.id"), nullable=False)
-    keyword = Column(String(255), nullable=False)
-
-    user = relationship("UserCredential", back_populates="preferences")
-
-    __table_args__ = (
-        UniqueConstraint('user_id', 'keyword', name='uq_user_keyword'),
-    )
-
-    def __str__(self):
-        return f"<UserPreference(id={self.id}, user_id={self.user_id}, keyword='{self.keyword}')>"
-
-
-class VideoSummaryGlobal(Base):
-    __tablename__ = 'video_summary_global'
-    id = Column(Integer, primary_key=True)
-    video_id = Column(String(255), unique=True, nullable=False)
-    video_title = Column(String(512))
-    video_link = Column(String(1024))
-    summary = Column(Text)
-    tags = Column(String)
-    category = Column(String)
-    source = Column(String(50))
+    title = Column(String(255), nullable=False)
+    summary = Column(Text, nullable=False)
+    source = Column(String(50))  # e.g., 'youtube', 'medium'
+    link = Column(String(500))
+    category = Column(String(100))
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user_links = relationship("UserVideoMap", back_populates="video", cascade="all, delete-orphan")
+    tags = relationship("Tag", secondary="summary_tag_map", back_populates="summaries")
 
-    def __str__(self):
-        return f"<VideoSummaryGlobal(id={self.id}, video_id='{self.video_id}', title='{self.video_title}')>"
+    def __repr__(self):
+        return f"<Summary(id={self.id}, title='{self.title}', source='{self.source}')>"
 
+class Tag(Base):
+    __tablename__ = 'tags'
 
-
-class UserVideoMap(Base):
-    __tablename__ = 'user_video_map'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("user_credential.id"), nullable=False)
-    video_id = Column(Integer, ForeignKey("video_summary_global.id"), nullable=False)
-    matched_keywords = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    name = Column(String(100), unique=True, nullable=False)  # e.g., 'ai', 'blockchain'
 
-    user = relationship("UserCredential", back_populates="user_video_maps")
-    video = relationship("VideoSummaryGlobal", back_populates="user_links")
+    summaries = relationship("Summary", secondary="summary_tag_map", back_populates="tags")
+    users = relationship("UserCredential", secondary="user_tag_map", back_populates="tags")
 
-    __table_args__ = (
-        UniqueConstraint('user_id', 'video_id', name='uq_user_video_map'),
-    )
-
-
-    def __str__(self):
-        return f"<UserVideoMap(id={self.id}, user_id={self.user_id}, video_id={self.video_id})>"
-
+    def __repr__(self):
+        return f"<Tag(id={self.id}, name='{self.name}')>"
 
 class Database:
     def __init__(self, db_url="postgresql://postgres:aishorts%40123@db.jjcrgyehjwvvwvamqhwx.supabase.co:5432/postgres"):
@@ -81,15 +64,10 @@ class Database:
         self.SessionLocal = sessionmaker(bind=self.engine)
 
     def create_tables(self):
-        """Create all tables in the database"""
         Base.metadata.create_all(self.engine)
 
     def get_session(self):
-        """Get a new database session"""
         return self.SessionLocal()
 
     def close(self):
-        """Close the database connection"""
         self.engine.dispose()
-
-

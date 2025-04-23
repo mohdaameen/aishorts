@@ -5,21 +5,22 @@ from dotenv import load_dotenv
 from youtube_transcript_api import YouTubeTranscriptApi
 from datetime import datetime
 from .summarizer import summarize_final_summary
-from models.schemas import UserCredential, VideoSummaryGlobal, UserVideoMap, UserPreference
+from models.schemas import SummaryTagMap,UserTagMap, UserCredential, Summary, Tag, Database
 from sqlalchemy.exc import IntegrityError
 
 load_dotenv()
 
+db = Database()
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-
+PREDEFINED_CHANNELS=["UCsQoiOrh7jzKmE8NBofhTnQ","UChpleBmo18P08aKCIgti38g","UCXZCJLdBC09xxGZ6gcdrc6A","UChpleBmo18P08aKCIgti38g", "UCC-lyoTfSrcJzA1ab3APAgw"]
 
 def get_uploads_playlist_id(channel_id: str) -> str:
     url = f"https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id={channel_id}&key={YOUTUBE_API_KEY}"
     response = requests.get(url).json()
     return response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
-def get_latest_videos_from_channel(channel_id: str, max_results=1) -> list:
+def get_latest_videos_from_channel(channel_id: str, max_results=2) -> list:
     """
     Get the latest videos from a YouTube channel.
 
@@ -46,6 +47,7 @@ def get_latest_videos_from_channel(channel_id: str, max_results=1) -> list:
 def fetch_youtube_transcript(video_id: str) -> list:
     try:
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
+        print(transcript)
         return transcript
     except Exception as e:
         return [{"text": f"Error fetching transcript: {str(e)}"}]
@@ -57,16 +59,6 @@ def process_all_users():
     session = db.get_session()
 
     try:
-        users = session.query(UserCredential).all()
-        all_keywords = set()
-        keyword_user_map = {}
-
-        for user in users:
-            for pref in user.preferences:
-                keyword = pref.keyword.lower()
-                all_keywords.add(keyword)
-                keyword_user_map.setdefault(keyword, set()).add(user.id)
-
         for channel_id in PREDEFINED_CHANNELS:
             print(f"\n📺 Checking channel: {channel_id}")
             videos = get_latest_videos_from_channel(channel_id)
@@ -76,46 +68,47 @@ def process_all_users():
                 title = video["title"]
                 description = video["description"]
 
-                already_processed = session.query(VideoSummary).filter_by(video_id=video_id).first()
-                if already_processed:
-                    print(f"✅ Skipping already processed video globally: {video_id}")
-                    continue
-
-                matched_keywords = [kw for kw in all_keywords if kw in f"{title} {description}".lower()]
-                if not matched_keywords:
+                existing_summary = session.query(Summary).filter_by(link=f"https://www.youtube.com/watch?v={video_id}").first()
+                if existing_summary:
+                    print(f"✅ Skipping already processed video: {video_id}")
                     continue
 
                 transcript = fetch_youtube_transcript(video_id)
                 if not transcript or "Error" in transcript[0].get("text", ""):
+                    print(f"⚠️ Skipping due to transcript issue: {video_id}")
                     continue
 
                 full_text = " ".join([entry["text"] for entry in transcript])
-                summary = summarize_final_summary(full_text)
+                summary_output = summarize_final_summary(full_text)
 
-                summary_data = {
-                    "video_id": video_id,
-                    "video_title": summary.get("title"),
-                    "video_link": f"https://www.youtube.com/watch?v={video_id}",
-                    "summary": summary.get("summary"),
-                    "tags": summary.get("tags"),
-                    "category": summary.get("category"),
-                    "source": "youtube"
-                }
+                new_summary = Summary(
+                    title=summary_output.get("title"),
+                    summary=summary_output.get("summary"),
+                    source="youtube",
+                    link=f"https://www.youtube.com/watch?v={video_id}",
+                    category=summary_output.get("category")
+                )
+                session.add(new_summary)
+                session.flush()  
 
-                processed_users = set()
+                tag_names = summary_output.get("tags", [])
+                for tag_name in tag_names:
+                    tag_name = tag_name.lower().strip()
+                    tag = session.query(Tag).filter_by(name=tag_name).first()
+                    if not tag:
+                        tag = Tag(name=tag_name)
+                        session.add(tag)
+                        session.flush()
+                    new_summary.tags.append(tag)
 
-                for keyword in matched_keywords:
-                    for user_id in keyword_user_map[keyword]:
-                        if user_id in processed_users:
-                            continue
-
-                        session.add(VideoSummary(user_id=user_id, **summary_data))
-                        processed_users.add(user_id)
+                print(f"✅ Saved summary for video: {video_id}")
 
         session.commit()
         print("✅ All summaries stored in DB.")
+
     except Exception as e:
         session.rollback()
         print(f"❌ Error: {e}")
     finally:
         session.close()
+
