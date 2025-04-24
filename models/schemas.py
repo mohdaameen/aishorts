@@ -1,10 +1,15 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Table, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker, backref
+from dotenv import load_dotenv
 from datetime import datetime
+import os
 
 Base = declarative_base()
+load_dotenv()
 
+
+DB_URL = os.getenv("DB_URL")
 # Association table for Summary <-> Tag (Many-to-Many)
 class SummaryTagMap(Base):
     __tablename__ = 'summary_tag_map'
@@ -59,7 +64,7 @@ class Tag(Base):
         return f"<Tag(id={self.id}, name='{self.name}')>"
 
 class Database:
-    def __init__(self, db_url="postgresql://postgres:aishorts%40123@db.jjcrgyehjwvvwvamqhwx.supabase.co:5432/postgres"):
+    def __init__(self, db_url=DB_URL):
         self.engine = create_engine(db_url)
         self.SessionLocal = sessionmaker(bind=self.engine)
 
