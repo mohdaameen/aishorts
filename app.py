@@ -8,6 +8,7 @@ from utils.youtube import process_all_users
 from sqlalchemy.orm import joinedload
 from utils.rss import process_blog_feed_for_all_users
 from models.schemas import Database, Tag, UserTagMap, UserCredential, Summary
+from datetime import datetime, timedelta
 
 
 db = Database()
@@ -16,7 +17,6 @@ db = Database()
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(auth_bp)
-db.create_tables()  
 
 scheduler = APScheduler()
 scheduler.init_app(app)
@@ -44,15 +44,22 @@ def get_user_summaries(user):
         if not tag_names:
             return jsonify([])
 
+        cutoff_date = datetime.utcnow() - timedelta(days=7)
+
         summaries = (
             session.query(Summary)
             .join(Summary.tags)
-            .filter(Tag.name.in_(tag_names))
+            .filter(
+                Tag.name.in_(tag_names),
+                Summary.created_at >= cutoff_date 
+            )
             .options(joinedload(Summary.tags))
             .distinct()
             .all()
         )
-        print(summaries[0])
+        
+        if not summaries:
+            return jsonify([])
 
         summary_list = []
         for summary in summaries:
