@@ -22,8 +22,8 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
-scheduler.add_job(id='youtube_summary_job', func=process_all_users, trigger='interval', seconds=15000)
-scheduler.add_job(id='blog_summary_job', func=process_blog_feed_for_all_users, trigger='interval', seconds=30)
+scheduler.add_job(id='youtube_summary_job', func=process_all_users, trigger='interval', seconds=300)
+scheduler.add_job(id='blog_summary_job', func=process_blog_feed_for_all_users, trigger='interval', seconds=300)
 
 @app.route("/", methods=["GET"])
 def index():

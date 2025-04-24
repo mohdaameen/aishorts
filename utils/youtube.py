@@ -78,7 +78,7 @@ def process_all_users():
                     continue
 
                 full_text = " ".join([entry["text"] for entry in transcript])
-                summary_output = summarize_final_summary(full_text)
+                summary_output = summarize_final_summary_youtube(full_text)
                 print(summary_output)
 
                 new_summary = Summary(
